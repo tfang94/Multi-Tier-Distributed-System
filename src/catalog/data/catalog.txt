@@ -1,0 +1,1 @@
+{"price": {"Tux": 15.99, "Whale": 20.99, "Elephant": 25.99, "Bird": 30.99}, "quantity": {"Tux": 9959, "Whale": 9966, "Elephant": 9972, "Bird": 9964}}

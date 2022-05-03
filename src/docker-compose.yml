@@ -1,0 +1,14 @@
+version: "3.9"
+services:
+  frontend:
+    build: ./front-end/.
+    ports: [ "8001:8001", "12745:12745" ]
+    depends_on: [ order, catalog ]
+  order:
+    build: ./order/.
+    ports: [ "12645:12645" ]
+    volumes: [ ./order/data:/app/data ]
+    depends_on: [ catalog ]
+  catalog:
+    build: ./catalog/.
+    volumes: [ ./catalog/data:/app/data ]
