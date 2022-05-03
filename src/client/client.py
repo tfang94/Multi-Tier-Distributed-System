@@ -23,17 +23,23 @@ def main():
 
     query_cnt = 0
     buy_cnt = 0
+    getOrder_cnt = 0
     query_time = 0
     buy_time = 0
+    getOrder_time = 0
     query_start = 0
     query_end = 0
+    getOrder_start = 0
     buy_start = 0
     buy_end = 0
+    getOrder_end = 0
+    
 
     with requests.Session() as s:  # Session of requests using same connection
+        localOrderHistory = []
+        nameList = ["Tux", "Whale", "Elephant", "Bird", "Lego", "Frisbee", "Barbie", "Monopoly", "Marbles", "Chess"]
         for i in range(n):  # Sequence of n queries and (potential) buy requests
             # Randomly query frontend server
-            nameList = ["Tux", "Whale", "Elephant", "Bird", "Lego", "Frisbee", "Barbie", "Monopoly", "Marbles", "Chess"]
             randIndex = random.randint(0, 9)
             name = nameList[randIndex]
             host = '128.119.243.168'  # elnux3 IP
@@ -42,7 +48,7 @@ def main():
             port = 8001
             URL = "http://{}:{}/products/{}".format(
                 host, port, name)
-            # Only start measuring latency after second iteration since there is a sync up period in the first round
+            # Only start measuring latency after first iteration since there is a sync up period in the first round
             if i > 0:
                 query_start = time.time()
             r1 = s.get(URL)  # Queries item
@@ -59,24 +65,48 @@ def main():
                     if i > 0:
                         buy_start = time.time()
                     r2 = s.post(URL, order)
+                    post_result = r2.content.decode()
                     if i > 0:
                         buy_end = time.time()
                         buy_cnt += 1
                         buy_time += buy_end - buy_start
-                    post_result = r2.content.decode()
                     try:
                         order_id = int(post_result)
+                        localOrderHistory.append({"number": order_id, "name": name, "quantity": 1})
                         print("Order successful; ID = {}".format(order_id))
                     except:
                         print(post_result)
 
+    # Before exiting verify local order history matches order query requests to server
+    print("\n")
+    print("--verifying local order history matches query order requests to server--")
+    print("Local orer history size: {}".format(len(localOrderHistory)))
+    matches = True
+    for order in localOrderHistory:
+        URL = "http://{}:{}/orders/{}".format(host, port, order.get("number"))
 
-    if (query_cnt > 0 and buy_cnt > 0):
+        getOrder_start = time.time()
+        r3 = s.get(URL)
+        query_result = json.loads(r3.content.decode())
+        getOrder_end = time.time()
+        getOrder_cnt += 1
+        getOrder_time += getOrder_end - getOrder_start
+
+        if order.get("name") != query_result.get("name") or order.get("quantity") != int(query_result.get("quantity")):
+            matches = False
+            print("mismatch for order {}".format(order.get("number")))
+    if matches:
+        print("verified - all orders match\n")
+
+    if (query_cnt > 0 and buy_cnt > 0 and getOrder_cnt > 0):
         average_query_time = query_time / query_cnt
         average_buy_time = buy_time / buy_cnt
+        average_getOrder_time = getOrder_time / getOrder_cnt
         print("\nResults:\n--------------------------------------------------------------")
         print("Average Query Time: {}".format(average_query_time))
         print("Average Buy Time: {}".format(average_buy_time))
+        print("Average getOrder Time: {}".format(average_getOrder_time))
+        print("\n")
 
 
 if __name__ == "__main__":

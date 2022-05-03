@@ -12,8 +12,7 @@ a = rwlock.RWLockFairD()
 def restock():
     global a
     Timer(10.0, restock).start()
-    print("----------------------------------------------")
-    print("Checking Inventory:")
+    print("\n--Checking Inventory--")
     write_lock = a.gen_wlock()
     with write_lock:
         with open("./data/catalog.txt") as f:
@@ -25,7 +24,7 @@ def restock():
                 qMap[key] = 100
         with open("./data/catalog.txt", "w") as f:
             json.dump(data, f)
-    print("----------------------------------------------\n")
+    print("\n")
 
 
 def Query(name):  # Returns dictionary representing JSON object
