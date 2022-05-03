@@ -70,7 +70,7 @@ def getOrder(order_id):
 
 
 def handleClient(c, addr):  # Function to pass to threads; thread per session model
-    print("Connected to :", addr[0], ":", addr[1])
+    # print("Connected to :", addr[0], ":", addr[1])
     incoming = c.recv(1024)
     while incoming:
         # frontend service sends order in form of JSON object

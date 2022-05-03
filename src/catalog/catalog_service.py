@@ -5,8 +5,27 @@ import json
 import re
 from optparse import OptionParser
 import os
+from threading import Timer
 
 a = rwlock.RWLockFairD()
+
+def restock():
+    global a
+    Timer(10.0, restock).start()
+    print("----------------------------------------------")
+    print("Checking Inventory:")
+    write_lock = a.gen_wlock()
+    with write_lock:
+        with open("./data/catalog.txt") as f:
+            data = json.load(f)
+        qMap = data.get("quantity")
+        for key in qMap:
+            if qMap.get(key) == 0:
+                print("restocked {}".format(key))
+                qMap[key] = 100
+        with open("./data/catalog.txt", "w") as f:
+            json.dump(data, f)
+    print("----------------------------------------------\n")
 
 
 def Query(name):  # Returns dictionary representing JSON object
@@ -17,9 +36,9 @@ def Query(name):  # Returns dictionary representing JSON object
             data = json.load(f)
     quantity = data.get("quantity").get(name)
     price = data.get("price").get(name)
-    if quantity:
+    if quantity is not None:
         result = {"name": name, "price": price, "quantity": quantity}
-        print(result)
+        # print(result)
         return result
     else:  # Return error as JSON if product doesn't exist
         return {"error": {"code": 404, "message": "product not found"}}
@@ -43,7 +62,7 @@ def Buy(name, req_qty):  # If in stock, decrements quantity of toy in catalog.tx
 
 
 def handleClient(c, addr):  # Function to pass to threads; thread per session model
-    print("Connected to :", addr[0], ":", addr[1])
+    # print("Connected to :", addr[0], ":", addr[1])
     incoming = c.recv(1024)
     while incoming:
         # Parse message and call Query()
@@ -72,6 +91,7 @@ def main():
     global d
     d = options.d
 
+    restock() # continuously checks and restocks out of stock item every 10 seconds
     host = '128.119.243.168'  # elnux3 IP
     if d == 1:
         host = socket.gethostbyname(socket.gethostname())  # Run on Docker
