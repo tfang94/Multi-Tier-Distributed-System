@@ -33,8 +33,8 @@ def main():
     with requests.Session() as s:  # Session of requests using same connection
         for i in range(n):  # Sequence of n queries and (potential) buy requests
             # Randomly query frontend server
-            nameList = ["Tux", "Whale", "Elephant", "Bird"]
-            randIndex = random.randint(0, 3)
+            nameList = ["Tux", "Whale", "Elephant", "Bird", "Lego", "Frisbee", "Barbie", "Monopoly", "Marbles", "Chess"]
+            randIndex = random.randint(0, 9)
             name = nameList[randIndex]
             host = '128.119.243.168'  # elnux3 IP
             if d == 1:
