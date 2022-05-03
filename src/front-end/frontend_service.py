@@ -25,6 +25,7 @@ class httpHandler(BaseHTTPRequestHandler):
         self.send_header("Content-type", "text/html")
         self.end_headers()
 
+        # GET /products/<product_name>
         # Check if match exists for /products/<product name>
         route_regex = re.compile(r"^/products/(.+)$")
         path = self.path
@@ -34,10 +35,32 @@ class httpHandler(BaseHTTPRequestHandler):
             host = '128.119.243.168'  # elnux3 IP
             if d == 1:
                 host = os.getenv("CATALOG_IP", "catalog")
+            if d == 2:
+                host = '127.0.0.1'
             port = 12645  # port number catalog_service is running on
             s = socket.socket()
             s.connect((host, port))
             msg = "Query " + name  # call query method
+            s.send(msg.encode())
+            incoming = s.recv(1024)  # results of call
+            self.wfile.write(incoming)  # write back to client
+            s.close()
+        
+        # GET /orders/<order_number>
+        route_regex = re.compile(r"^/orders/(.+)$")
+        path = self.path
+        match = route_regex.match(path)
+        if match:  # contact catalog_service to call Query() method
+            order_id = match.group(1)
+            host = '128.119.243.168'  # elnux3 IP
+            if d == 1:
+                host = os.getenv("CATALOG_IP", "catalog")
+            if d == 2:
+                host = '127.0.0.1'
+            port = 12745  # port number order_service is running on
+            s = socket.socket()
+            s.connect((host, port))
+            msg = "getOrder " + order_id  # call query method
             s.send(msg.encode())
             incoming = s.recv(1024)  # results of call
             self.wfile.write(incoming)  # write back to client
@@ -68,21 +91,27 @@ class httpHandler(BaseHTTPRequestHandler):
             host = '128.119.243.168'  # elnux3 IP
             if d == 1:
                 host = os.getenv("ORDER_IP", "order")
+            if d == 2:
+                host = '127.0.0.1'
             port = 12745  # port number order_service is running on
             s = socket.socket()
             s.connect((host, port))
-            s.send(json.dumps(data).encode())
+            msg = "processOrder " + json.dumps(data)
+            s.send(msg.encode())
             incoming = s.recv(1024)  # results of call
-            result = int(incoming.decode())
             msg = None
-            if result >= 0:
-                msg = str(result)
-            if result == -1:
-                msg = json.dumps(
-                    {"error": {"code": 404, "message": "product not found"}})
-            if result == -2:
-                msg = json.dumps(
-                    {"error": {"code": 404, "message": "product out of stock"}})
+            try:
+                result = int(incoming.decode())
+                if result >= 0:
+                    msg = str(result)
+                if result == -1:
+                    msg = json.dumps(
+                        {"error": {"code": 404, "message": "product not found"}})
+                if result == -2:
+                    msg = json.dumps(
+                        {"error": {"code": 404, "message": "product out of stock"}})
+            except:
+                msg = incoming.decode()
             self.wfile.write(msg.encode())  # write back to client
             s.close()
         return
@@ -104,6 +133,8 @@ def main():
     host = '128.119.243.168'  # elnux3 IP
     if d == 1:
         host = socket.gethostbyname(socket.gethostname())
+    if d == 2:
+        host = '127.0.0.1'
     PORT = 8001
     server = ThreadingHTTPServer((host, PORT), httpHandler)
     server.serve_forever()

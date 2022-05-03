@@ -11,7 +11,8 @@ class Testing(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         super(Testing, self).__init__(*args, **kwargs)
-        self.host = '128.119.243.168'  # elnux3 IP
+        # self.host = '128.119.243.168'  # Uncomment to test elnux3
+        self.host = '127.0.0.1'
         self.port = 8001
 
     # Check JSON item returned after normal GET request

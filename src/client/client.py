@@ -38,7 +38,7 @@ def main():
             name = nameList[randIndex]
             host = '128.119.243.168'  # elnux3 IP
             if d == 1:
-                host = '127.0.0.1'
+                host = '127.0.0.1'  # Run on Docker or local machine
             port = 8001
             URL = "http://{}:{}/products/{}".format(
                 host, port, name)
@@ -63,7 +63,13 @@ def main():
                         buy_end = time.time()
                         buy_cnt += 1
                         buy_time += buy_end - buy_start
-                    print("Order successful; ID = {}".format(r2.content.decode()))
+                    post_result = r2.content.decode()
+                    try:
+                        order_id = int(post_result)
+                        print("Order successful; ID = {}".format(order_id))
+                    except:
+                        print(post_result)
+
 
     if (query_cnt > 0 and buy_cnt > 0):
         average_query_time = query_time / query_cnt

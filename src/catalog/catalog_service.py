@@ -8,6 +8,7 @@ import os
 
 a = rwlock.RWLockFairD()
 
+
 def Query(name):  # Returns dictionary representing JSON object
     global a
     read_lock = a.gen_rlock()
@@ -52,7 +53,12 @@ def handleClient(c, addr):  # Function to pass to threads; thread per session mo
         if x[0] == "Query":
             response = json.dumps(Query(x[1]))
         if x[0] == "Buy":
-            response = str(Buy(x[1], int(x[2])))
+            try:
+                name = x[1]
+                req_qty = int(x[2])
+                response = str(Buy(name, req_qty))
+            except:
+                response = json.dumps({"error": {"code": 404, "message": "invalid quantity requested"}})
         c.send(response.encode())
         incoming = c.recv(1024)
     c.close()
@@ -61,14 +67,16 @@ def handleClient(c, addr):  # Function to pass to threads; thread per session mo
 def main():
     parser = OptionParser()
     parser.add_option('-d', default=1, help='Running on docker', action='store',
-                    type='int', dest='d')
+                      type='int', dest='d')
     (options, args) = parser.parse_args()
     global d
     d = options.d
 
     host = '128.119.243.168'  # elnux3 IP
     if d == 1:
-        host = socket.gethostbyname(socket.gethostname())
+        host = socket.gethostbyname(socket.gethostname())  # Run on Docker
+    if d == 2:
+        host = '127.0.0.1'  # Run on local machine
     port = 12645
     s = socket.socket()
     s.bind((host, port))
