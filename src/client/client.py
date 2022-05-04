@@ -80,7 +80,7 @@ def main():
     # Before exiting verify local order history matches order query requests to server
     print("\n")
     print("--verifying local order history matches query order requests to server--")
-    print("Local orer history size: {}".format(len(localOrderHistory)))
+    print("Local order history size: {}".format(len(localOrderHistory)))
     matches = True
     for order in localOrderHistory:
         URL = "http://{}:{}/orders/{}".format(host, port, order.get("number"))
@@ -98,12 +98,12 @@ def main():
     if matches:
         print("verified - all orders match\n")
 
-    if (query_cnt > 0 and buy_cnt > 0 and getOrder_cnt > 0):
-        average_query_time = query_time / query_cnt
+    print("\nResults:\n--------------------------------------------------------------")
+    average_query_time = query_time / query_cnt
+    print("Average Query Time: {}".format(average_query_time))
+    if (buy_cnt > 0 and getOrder_cnt > 0):
         average_buy_time = buy_time / buy_cnt
         average_getOrder_time = getOrder_time / getOrder_cnt
-        print("\nResults:\n--------------------------------------------------------------")
-        print("Average Query Time: {}".format(average_query_time))
         print("Average Buy Time: {}".format(average_buy_time))
         print("Average getOrder Time: {}".format(average_getOrder_time))
         print("\n")
