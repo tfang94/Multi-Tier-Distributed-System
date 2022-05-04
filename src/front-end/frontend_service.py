@@ -6,6 +6,7 @@ import cgi
 from urllib.parse import parse_qs
 from optparse import OptionParser
 import os
+from threading import Thread
 
 # Optional command line argument 
 z = 1 # number of clients to wait before starting threads
@@ -27,6 +28,26 @@ def invalidate_item(name):
     global invalidation_flag
     if name is not None:
         invalidation_flag[name] = True
+
+# catalog service sends invalidation flag upon restocking an item
+def listen_restock():
+    host = '128.119.243.168'  # elnux3 IP
+    if d == 1:
+        host = os.getenv("CATALOG_IP", "catalog")
+    if d == 2:
+        host = '127.0.0.1'
+    port = 12545  # catalog_service restock port
+    s1 = socket.socket()
+    s1.connect((host, port))
+    incoming = s1.recv(1024).decode()
+    while incoming:
+        names = re.split("\s", incoming)
+        for name in names:
+            if name != "":
+                invalidate_item(name)
+                print("received restock notification for {}".format(name))
+        incoming = s1.recv(1024).decode()
+    s1.close()
 
 class httpHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -70,7 +91,6 @@ class httpHandler(BaseHTTPRequestHandler):
             data = json.loads(incoming)
             # if query successful then push to cache
             if data.get("error") is None:
-                print("successful query")
                 push_cache(name, incoming)
             self.wfile.write(incoming.encode())  # write back to client
             s.close()
@@ -165,6 +185,10 @@ def main():
     z = options.z
     d = options.d
     c = options.c
+    # assign thread to listen to catalog server for invalidation notifications due to restocking an item
+    if c == 1:
+        t1 = Thread(target = listen_restock, args=())
+        t1.start()
     host = '128.119.243.168'  # elnux3 IP
     if d == 1:
         host = socket.gethostbyname(socket.gethostname())

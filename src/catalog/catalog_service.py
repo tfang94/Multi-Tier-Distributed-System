@@ -9,9 +9,9 @@ from threading import Timer
 
 a = rwlock.RWLockFairD()
 
-def restock():
+def restock(c):
     global a
-    Timer(10.0, restock).start()
+    Timer(10.0, restock, [c]).start()
     print("\n--Checking Inventory--")
     write_lock = a.gen_wlock()
     with write_lock:
@@ -22,6 +22,8 @@ def restock():
             if qMap.get(key) == 0:
                 print("restocked {}".format(key))
                 qMap[key] = 100
+                msg = key + " " # sometimes multiple messages may be combined into one so add a space to help parse
+                c.send(msg.encode())
         with open("./data/catalog.txt", "w") as f:
             json.dump(data, f)
     print("\n")
@@ -90,12 +92,18 @@ def main():
     global d
     d = options.d
 
-    restock() # continuously checks and restocks out of stock item every 10 seconds
     host = '128.119.243.168'  # elnux3 IP
     if d == 1:
         host = socket.gethostbyname(socket.gethostname())  # Run on Docker
     if d == 2:
         host = '127.0.0.1'  # Run on local machine
+    restock_port = 12545
+    s1 = socket.socket() # separate socket for sending restock notifications to front-end
+    s1.bind((host, restock_port))
+    s1.listen()
+    c, addr = s1.accept()
+    restock(c) # continuously checks and restocks out of stock item every 10 seconds
+
     port = 12645
     s = socket.socket()
     s.bind((host, port))
