@@ -15,7 +15,7 @@ def main():
     parser.add_option('-n', default=50, help='Number of iterations of request cycles for session', action='store',
                       type='int', dest='n')
     parser.add_option('-i', default='127.0.0.1', help='server IP', action='store',
-                      type='int', dest='i') 
+                      type='string', dest='i') 
     (options, args) = parser.parse_args()
     p = options.p  # Parameter for probability of sending order request
     n = options.n  # Number of iterations of request cycles for session
