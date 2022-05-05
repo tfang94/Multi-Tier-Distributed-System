@@ -15,6 +15,7 @@ leader_id = 0 # unitialized leader_id; determined by frontend calling leader ele
 port_map_main = {} # main channel for handling order requests; key refers to replica id
 port_map_leader = {} # for leader election
 port_map_sync = {} # data synchronization
+port_map_newOrder = {} # leader node propogates new orders
 
 
 def initializeRepMap():
@@ -30,6 +31,9 @@ def initializeRepMap():
     port_map_sync[1] = 31111
     port_map_sync[2] = 31112
     port_map_sync[3] = 31113
+    port_map_newOrder[1] = 41111
+    port_map_newOrder[2] = 41112
+    port_map_newOrder[3] = 41113
     
 def listenMain(main_socket, executor):
     while True:
@@ -47,6 +51,11 @@ def listenLeader(leader_socket, executor):
     while True:
         c, addr = leader_socket.accept()
         executor.submit(handleLeaderElection, c)
+
+def listenNewOrder(newOrder_socket, executor):
+    while True:
+        c, addr = newOrder_socket.accept()
+        executor.submit(newOrderListener, c)
 
 def syncPush():
     global rep_id
@@ -149,9 +158,39 @@ def handleLeaderElection(c):
     match = reg.match(incoming) 
     if match:
         leader_id = int(match.group(1))
-        print("\n--New Leader Elected--")
-        print("new leader ID is {}\n".format(leader_id))
+        print("\n--Leader Elected--")
+        print("leader ID is {}\n".format(leader_id))
     c.close()
+
+def newOrderListener(c):
+    global a
+    write_lock = a.gen_wlock()
+    incoming = c.recv(1024).decode()
+    new_order = json.loads(incoming).get("new_order")
+    with write_lock:
+        with open("./data/orders.txt") as f:
+            data = json.load(f)
+        data.get("orders").append(new_order)
+        with open("./data/orders.txt", "w") as f:
+            json.dump(data, f)
+    c.close()
+
+def newOrderPropogate(order):
+    global rep_id
+    global port_map_newOrder
+    for rid in port_map_newOrder:
+        if rid != rep_id: # send other replicas the new order
+            host = '127.0.0.1'
+            port = port_map_newOrder[rid]
+            s = socket.socket()
+            try:
+                s.connect((host, port))
+                json_order = {"new_order": order}
+                msg = json.dumps(json_order)
+                s.send(msg.encode())
+            except ConnectionRefusedError:
+                pass # replica not online
+
 
 def processOrder(order):
     # Input: dictionary
@@ -189,6 +228,7 @@ def processOrder(order):
             with open("./data/orders.txt", "w") as f:
                 json.dump(data, f)
         print(new_order)
+        newOrderPropogate(new_order) # propogate new order to replica nodes
         return str(id)
     return str(result)  # Unsuccessful buy order
 
@@ -262,13 +302,21 @@ def main():
     leader_socket.bind((host, port))
     leader_socket.listen()
 
-    # assign 2 threads to listen for sync data connections and main connections
+    # Socket for listening to order propogation from leader node
+    port = port_map_newOrder[rep_id]
+    newOrder_socket = socket.socket()
+    newOrder_socket.bind((host, port))
+    newOrder_socket.listen()
+
+    # assign threads to listen for data connections
     t1 = Thread(target=listenSync, args=(sync_socket, executor,))
     t2 = Thread(target=listenMain, args=(main_socket, executor,))
     t3 = Thread(target=listenLeader, args=(leader_socket, executor,))
+    t4 = Thread(target=listenNewOrder, args=(newOrder_socket, executor))
     t1.start()
     t2.start()
     t3.start()
+    t4.start()
 
 
 if __name__ == "__main__":

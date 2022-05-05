@@ -7,6 +7,8 @@ from urllib.parse import parse_qs
 from optparse import OptionParser
 import os
 from threading import Thread
+import sys
+import errno
 
 # Optional command line argument 
 z = 1 # number of clients to wait before starting threads
@@ -136,22 +138,35 @@ class httpHandler(BaseHTTPRequestHandler):
                 push_cache(name, incoming)
             self.wfile.write(incoming.encode())  # write back to client
             s.close()
+            return
         
         # GET /orders/<order_number>
         route_regex = re.compile(r"^/orders/(.+)$")
         path = self.path
         match = route_regex.match(path)
         host = '127.0.0.1'
-        port = port_map_order[leader_id]  # order_service leader node
         if match:  # match exists for /orders/<order_number>
             order_id = match.group(1)
-            s = socket.socket()
-            s.connect((host, port))
-            msg = "getOrder " + order_id  # call query method
-            s.send(msg.encode())
-            incoming = s.recv(1024)  # results of call
-            self.wfile.write(incoming)  # write back to client
-            s.close()
+            # if order service fails, elect new leader and try again
+            while True:
+                port = port_map_order[leader_id]  # order_service leader node
+                s = socket.socket()
+                try: 
+                    s.connect((host, port))
+                    msg = "getOrder " + order_id  # call query method
+                    s.send(msg.encode())
+                    incoming = s.recv(1024)  # results of call
+                    self.wfile.write(incoming)  # write back to client
+                    s.close()
+                    break # successfully interacted with order_service, exit loop
+                except ConnectionRefusedError:
+                    print("Leader node of order service not present")
+                    LeaderElection()
+                except IOError as e:
+                    if e.errno == errno.EPIPE:
+                        print("Leader node of order service failed")
+                    LeaderElection()
+                
 
     def do_POST(self):
         global d
@@ -176,30 +191,40 @@ class httpHandler(BaseHTTPRequestHandler):
 
         if self.path == "/orders":
             host = '127.0.0.1'
-            port = port_map_order[leader_id]  # order_service leader node
-            s = socket.socket()
-            s.connect((host, port))
-            msg = "processOrder " + json.dumps(data)
-            s.send(msg.encode())
-            incoming = s.recv(1024)  # results of call
-            msg = None
-            try:
-                result = int(incoming.decode())
-                if result >= 0: # succesful order
-                    msg = str(result)
-                    if c == 1:
-                        invalidate_item(data.get("name")) # invalidate item in cache after successful buy()
-                if result == -1:
-                    msg = json.dumps(
-                        {"error": {"code": 404, "message": "product not found"}})
-                if result == -2:
-                    msg = json.dumps(
-                        {"error": {"code": 404, "message": "product out of stock"}})
-            except:
-                msg = incoming.decode()
-            self.wfile.write(msg.encode())  # write back to client
-            s.close()
-        return
+            while True:
+                port = port_map_order[leader_id]  # order_service leader node
+                s = socket.socket()
+                try:
+                    s.connect((host, port))
+                    msg = "processOrder " + json.dumps(data)
+                    s.send(msg.encode())
+                    incoming = s.recv(1024)  # results of call
+                    msg = None
+                    try:
+                        result = int(incoming.decode())
+                        if result >= 0: # succesful order
+                            msg = str(result)
+                            if c == 1:
+                                invalidate_item(data.get("name")) # invalidate item in cache after successful buy()
+                        if result == -1:
+                            msg = json.dumps(
+                                {"error": {"code": 404, "message": "product not found"}})
+                        if result == -2:
+                            msg = json.dumps(
+                                {"error": {"code": 404, "message": "product out of stock"}})
+                    except:
+                        msg = incoming.decode()
+                    self.wfile.write(msg.encode())  # write back to client
+                    s.close()
+                    break # successfully interacted with order_service, exit loop
+                except ConnectionRefusedError:
+                    print("Leader node of order service not present")
+                    LeaderElection()
+                except IOError as e:
+                    if e.errno == errno.EPIPE:
+                        print("Leader node of order service failed")
+                    LeaderElection()
+                
 
 
 def main():
