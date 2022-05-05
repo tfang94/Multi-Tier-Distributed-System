@@ -249,7 +249,7 @@ def main():
     if c == 1:
         t1 = Thread(target = listen_restock, args=())
         t1.start()
-    host = '127.0.0.1'
+    host = '0.0.0.0'
     PORT = 8001
     server = ThreadingHTTPServer((host, PORT), httpHandler)
     server.serve_forever()
