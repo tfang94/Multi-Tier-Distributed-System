@@ -16,6 +16,20 @@ c = 1 # in-memory cache flag
 cache = {} 
 invalidation_flag = {} # buy() and restock() invalidate, successful query resets
 
+leader_id = 0 # unitialized leader_id; determined by leader election
+port_map_order = {} # main channel for handling order requests; key refers to replica id
+port_map_leader = {} # for leader election
+
+def initializeRepMap():
+    global port_map_order
+    global port_map_leader
+    port_map_order[1] = 11111
+    port_map_order[2] = 11112
+    port_map_order[3] = 11113
+    port_map_leader[1] = 21111
+    port_map_leader[2] = 21112
+    port_map_leader[3] = 21113
+
 def push_cache(name, result):
     global cache
     global invalidation_flag
@@ -44,11 +58,48 @@ def listen_restock():
         incoming = s1.recv(1024).decode()
     s1.close()
 
+def LeaderElection():
+    global leader_id
+    global port_map_leader
+    print("--Leader Election--")
+    # ping each replica starting with highest ID in decreasing order
+    for rid in range(3, 0, -1):
+        host = '127.0.0.1'
+        port = port_map_leader[rid]
+        try:
+            s = socket.socket()
+            s.connect((host, port))
+            msg = "ping"
+            s.send(msg.encode())
+            incoming = s.recv(1024).decode()
+            if incoming == "present": # new leader chosen
+                leader_id = rid
+                print("New Leader: {}".format(leader_id))
+                break
+            s.close()
+        except ConnectionRefusedError:
+            print("order service with ID {} not present".format(rid))
+
+    # notify all replicas of new leader
+    for rid in range(3, 0, -1):
+        host = '127.0.0.1'
+        port = port_map_leader[rid]
+        try:
+            s = socket.socket()
+            s.connect((host, port))
+            msg = "New Leader: {}".format(leader_id)
+            s.send(msg.encode())
+            s.close()
+        except ConnectionRefusedError:
+            pass # node not online
+
 class httpHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         global z
         global d
         global c
+        global leader_id
+        global port_map_order
         if z > 0:
             z -= 1
             while z > 0:
@@ -91,7 +142,7 @@ class httpHandler(BaseHTTPRequestHandler):
         path = self.path
         match = route_regex.match(path)
         host = '127.0.0.1'
-        port = 11113  # order_service
+        port = port_map_order[leader_id]  # order_service leader node
         if match:  # match exists for /orders/<order_number>
             order_id = match.group(1)
             s = socket.socket()
@@ -125,7 +176,7 @@ class httpHandler(BaseHTTPRequestHandler):
 
         if self.path == "/orders":
             host = '127.0.0.1'
-            port = 11113  # port number order_service is running on
+            port = port_map_order[leader_id]  # order_service leader node
             s = socket.socket()
             s.connect((host, port))
             msg = "processOrder " + json.dumps(data)
@@ -165,6 +216,10 @@ def main():
     global c
     z = options.z
     c = options.c
+
+    initializeRepMap()
+    LeaderElection()
+
     # assign thread to listen to catalog server for invalidation notifications due to restocking an item
     if c == 1:
         t1 = Thread(target = listen_restock, args=())

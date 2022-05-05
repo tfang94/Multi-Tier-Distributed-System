@@ -8,7 +8,9 @@ import re
 from threading import Thread
 
 a = rwlock.RWLockFairD()
-rep_id = 2
+rep_id = 2 # Unique ID for this replica
+leader_id = 0 # unitialized leader_id; determined by frontend calling leader election
+
 # Use different ports for different purposes (i.e. order requests, leader election, synchronizing data)
 port_map_main = {} # main channel for handling order requests; key refers to replica id
 port_map_leader = {} # for leader election
@@ -29,18 +31,22 @@ def initializeRepMap():
     port_map_sync[2] = 31112
     port_map_sync[3] = 31113
     
-# Upon starting, each replica will contact the others to synchronize data to latest version.  Each replica is constantly listening for others
-
-def listenSync(listening_socket, executor):
+def listenMain(main_socket, executor):
     while True:
-        c, addr = listening_socket.accept()
+        c, addr = main_socket.accept()
+        executor.submit(handleClient, c, addr)
+
+# Upon starting, each replica will contact the others to synchronize data to latest version.  Each replica is constantly listening for others
+def listenSync(sync_socket, executor):
+    while True:
+        c, addr = sync_socket.accept()
         executor.submit(syncDataListener, c)
 
-def listenMain(s, executor):
-    print("calling listen main")
+# Each replica is constantly listening for leader election from frontend
+def listenLeader(leader_socket, executor):
     while True:
-        c, addr = s.accept()
-        executor.submit(handleClient, c, addr)
+        c, addr = leader_socket.accept()
+        executor.submit(handleLeaderElection, c)
 
 def syncPush():
     global rep_id
@@ -52,7 +58,6 @@ def syncPush():
             s = socket.socket()
             try:
                 s.connect((host, port))
-                print("--syncing with ID {}--".format(rid))
                 syncDataPusher(s, rid)
             except ConnectionRefusedError:
                 pass # replica not online yet
@@ -68,27 +73,36 @@ def syncDataListener(c):
     incoming = json.loads(c.recv(1024).decode())
     incoming_rid = incoming.get("rid")
     incoming_order_length = incoming.get("order_length")
+    print("--syncing with ID {}--".format(incoming_rid))
+
     if order_length == incoming_order_length: # no need to sync
         msg = "equal"
+        print("data already in sync")
         c.send(msg.encode())
     elif order_length < incoming_order_length: # update to pusher's file
-        msg = "push me"
+        diff = incoming_order_length - order_length
+        msg = "push me " + str(diff) # request missing entries
         c.send(msg.encode())
-        incoming = c.recv(1024).decode()
+        incoming = json.loads(c.recv(65536).decode()) # maximum TCP buffer size; likely enough for our purposes to be sent in one pass
+        requested_entries = incoming.get("requested_entries")
+        data.get("orders").extend(requested_entries) # append to orders list
         with write_lock:
             with open("./data/orders.txt", "w") as f:
-                f.write(incoming)
-        print("updated order data to version of replica with ID {}".format(incoming_rid))
+                json.dump(data, f)
+        print("updated with {} entries from ID {}".format(diff, incoming_rid))
     else:
-        msg = "mine is more updated"
+        diff = order_length - incoming_order_length
+        requested_entries = data.get("orders")[-diff:]
+        d_req = {}
+        d_req["requested_entries"] = requested_entries
+        msg = "requested entries: " + json.dumps(d_req) 
         c.send(msg.encode())
-        incoming = c.recv(1024).decode()
-        if incoming == "ok":
-            c.send(json.dumps(data).encode())
+        print("sent {} entries to ID {}".format(diff, incoming_rid))
     c.close()
 
 def syncDataPusher(s, listening_rid):
     global rep_id
+    print("--syncing with ID {}--".format(listening_rid))
     read_lock = a.gen_rlock()
     write_lock = a.gen_wlock()
     with read_lock:
@@ -98,24 +112,45 @@ def syncDataPusher(s, listening_rid):
     msg = {"rid": rep_id, "order_length": order_length}
     s.send(json.dumps(msg).encode())
     # listening side will compare results and send reply
-    incoming = s.recv(1024).decode()
+    incoming = s.recv(65536).decode()
     if incoming == "equal":
-        pass
-    if incoming == "push me":
-        s.send(json.dumps(data).encode())
-    if incoming == "mine is more updated":
-        msg = "ok"
-        s.send(msg.encode())
-        incoming = s.recv(1024).decode()
+        print("data already in sync")
+    reg = re.compile(r"^push me (.+)$")
+    match = reg.match(incoming)
+    if match: # listener requests entries
+        diff = int(match.group(1))
+        requested_entries = data.get("orders")[-diff:]
+        d_req = {}
+        d_req["requested_entries"] = requested_entries
+        s.send(json.dumps(d_req).encode())
+        print("sent {} entries to ID {}".format(diff, listening_rid))
+    reg = re.compile(r"requested entries: (.+)$")
+    match = reg.match(incoming)
+    if match: # listener has additional entries and pushes them
+        req_json = json.loads(match.group(1))
+        requested_entries = req_json.get("requested_entries")
+        data.get("orders").extend(requested_entries) # append to orders list
         with write_lock:
             with open("./data/orders.txt", "w") as f:
-                f.write(incoming)
-        print("updated order data to version of replication ID {}".format(listening_rid))
+                json.dump(data, f)
+        print("updated with {} entries from ID {}".format(len(requested_entries), listening_rid))
     s.close()
 
 
-def leadElection():
-    pass
+def handleLeaderElection(c):
+    global leader_id
+    incoming = c.recv(1024).decode()
+    # frontend pings replicas starting with highest ID
+    if incoming == "ping":
+        msg = "present"
+        c.send(msg.encode())
+    # if new leader elected, notifies all replicas
+    reg = re.compile(r"^New Leader: (.+)$")
+    match = reg.match(incoming) 
+    if match:
+        leader_id = int(match.group(1))
+        print("notified that new leader ID is {}".format(leader_id))
+    c.close()
 
 def processOrder(order):
     # Input: dictionary
@@ -200,25 +235,39 @@ def main():
     global port_map_main
     global port_map_leader
     global port_map_sync
+    global rep_id
+
     initializeRepMap()
     syncPush()
-    host = '127.0.0.1'
-    port = port_map_main[rep_id]
-    s = socket.socket()
-    s.bind((host, port))
-    s.listen(20)
-    executor = ThreadPoolExecutor(max_workers=20) # thread pool handles main communication with frontend and catalog
 
+    host = '127.0.0.1'
+    executor = ThreadPoolExecutor(max_workers=20) # thread pool to handle incoming connections
+
+    # Main socket for handling queries with frontend and catalog
+    port = port_map_main[rep_id]
+    main_socket = socket.socket()
+    main_socket.bind((host, port))
+    main_socket.listen(20)
+
+    # Socket for synchronizing with other replicas
     port = port_map_sync[rep_id]
-    listening_socket = socket.socket()
-    listening_socket.bind((host, port))
-    listening_socket.listen()
+    sync_socket = socket.socket()
+    sync_socket.bind((host, port))
+    sync_socket.listen()
+
+    # Socket for leader election
+    port = port_map_leader[rep_id]
+    leader_socket = socket.socket()
+    leader_socket.bind((host, port))
+    leader_socket.listen()
 
     # assign 2 threads to listen for sync data connections and main connections
-    t1 = Thread(target=listenSync, args=(listening_socket, executor,))
-    t2 = Thread(target=listenMain, args=(s, executor,))
+    t1 = Thread(target=listenSync, args=(sync_socket, executor,))
+    t2 = Thread(target=listenMain, args=(main_socket, executor,))
+    t3 = Thread(target=listenLeader, args=(leader_socket, executor,))
     t1.start()
     t2.start()
+    t3.start()
 
 
 if __name__ == "__main__":
