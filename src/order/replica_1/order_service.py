@@ -73,11 +73,11 @@ def syncDataListener(c):
     incoming = json.loads(c.recv(1024).decode())
     incoming_rid = incoming.get("rid")
     incoming_order_length = incoming.get("order_length")
-    print("--syncing with ID {}--".format(incoming_rid))
+    print("\n--syncing with ID {}--".format(incoming_rid))
 
     if order_length == incoming_order_length: # no need to sync
         msg = "equal"
-        print("data already in sync")
+        print("data already in sync\n")
         c.send(msg.encode())
     elif order_length < incoming_order_length: # update to pusher's file
         diff = incoming_order_length - order_length
@@ -89,7 +89,7 @@ def syncDataListener(c):
         with write_lock:
             with open("./data/orders.txt", "w") as f:
                 json.dump(data, f)
-        print("updated with {} entries from ID {}".format(diff, incoming_rid))
+        print("updated with {} entries from ID {}\n".format(diff, incoming_rid))
     else:
         diff = order_length - incoming_order_length
         requested_entries = data.get("orders")[-diff:]
@@ -97,12 +97,12 @@ def syncDataListener(c):
         d_req["requested_entries"] = requested_entries
         msg = "requested entries: " + json.dumps(d_req) 
         c.send(msg.encode())
-        print("sent {} entries to ID {}".format(diff, incoming_rid))
+        print("sent {} entries to ID {}\n".format(diff, incoming_rid))
     c.close()
 
 def syncDataPusher(s, listening_rid):
     global rep_id
-    print("--syncing with ID {}--".format(listening_rid))
+    print("\n--syncing with ID {}--".format(listening_rid))
     read_lock = a.gen_rlock()
     write_lock = a.gen_wlock()
     with read_lock:
@@ -114,7 +114,7 @@ def syncDataPusher(s, listening_rid):
     # listening side will compare results and send reply
     incoming = s.recv(65536).decode()
     if incoming == "equal":
-        print("data already in sync")
+        print("data already in sync\n")
     reg = re.compile(r"^push me (.+)$")
     match = reg.match(incoming)
     if match: # listener requests entries
@@ -123,7 +123,7 @@ def syncDataPusher(s, listening_rid):
         d_req = {}
         d_req["requested_entries"] = requested_entries
         s.send(json.dumps(d_req).encode())
-        print("sent {} entries to ID {}".format(diff, listening_rid))
+        print("sent {} entries to ID {}\n".format(diff, listening_rid))
     reg = re.compile(r"requested entries: (.+)$")
     match = reg.match(incoming)
     if match: # listener has additional entries and pushes them
@@ -133,7 +133,7 @@ def syncDataPusher(s, listening_rid):
         with write_lock:
             with open("./data/orders.txt", "w") as f:
                 json.dump(data, f)
-        print("updated with {} entries from ID {}".format(len(requested_entries), listening_rid))
+        print("updated with {} entries from ID {}\n".format(len(requested_entries), listening_rid))
     s.close()
 
 
@@ -149,7 +149,8 @@ def handleLeaderElection(c):
     match = reg.match(incoming) 
     if match:
         leader_id = int(match.group(1))
-        print("notified that new leader ID is {}".format(leader_id))
+        print("\n--New Leader Elected--")
+        print("new leader ID is {}\n".format(leader_id))
     c.close()
 
 def processOrder(order):
