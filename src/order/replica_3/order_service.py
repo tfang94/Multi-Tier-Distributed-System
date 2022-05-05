@@ -6,6 +6,7 @@ from optparse import OptionParser
 import os
 import re
 from threading import Thread
+import sys
 
 a = rwlock.RWLockFairD()
 rep_id = 3 # Unique ID for this replica
@@ -16,6 +17,9 @@ port_map_main = {} # main channel for handling order requests; key refers to rep
 port_map_leader = {} # for leader election
 port_map_sync = {} # data synchronization
 port_map_newOrder = {} # leader node propogates new orders
+
+f = 0 # simulates failure if optional command line parameter -f 1 is specified; for testing fault tolerance
+current_session_order_cnt = 0 # track number of orders; used in simulating failure
 
 
 def initializeRepMap():
@@ -56,6 +60,18 @@ def listenNewOrder(newOrder_socket, executor):
     while True:
         c, addr = newOrder_socket.accept()
         executor.submit(newOrderListener, c)
+
+# for testing purposes, simulates failure if optional command -f 1 is specified
+# will cause program to "crash" (exit) after 5 order requests.  The client does a sequence of 50 queries and potential buys
+#   so this will cause the node to crash mid processing
+def simulateFailure():
+    global current_session_order_cnt
+    while True:
+        if current_session_order_cnt >= 5:
+            print("\n--simulating failue--")
+            print("crashing and going offline\n")
+            os._exit(0)
+
 
 def syncPush():
     global rep_id
@@ -198,6 +214,7 @@ def processOrder(order):
     # Polls catalog_service to see if in stock.  If so, tell catalog_service to decrement toy quantity.
     # Then create new order entry in order.txt
     global a
+    global current_session_order_cnt
     host = '127.0.0.1'
     port = 12645
     s = socket.socket()
@@ -229,6 +246,7 @@ def processOrder(order):
                 json.dump(data, f)
         print(new_order)
         newOrderPropogate(new_order) # propogate new order to replica nodes
+        current_session_order_cnt += 1
         return str(id)
     return str(result)  # Unsuccessful buy order
 
@@ -277,6 +295,14 @@ def main():
     global port_map_leader
     global port_map_sync
     global rep_id
+    global f
+    # Optional command line arguments
+    parser = OptionParser()
+    parser.add_option('-f', default=0, help='Parameter simulating failure (set to 1 to simulate)', action='store',
+                      type='int', dest='f')
+    (options, args) = parser.parse_args()
+    f = options.f  # Parameter for probability of sending order request
+
 
     initializeRepMap()
     syncPush()
@@ -317,6 +343,10 @@ def main():
     t2.start()
     t3.start()
     t4.start()
+
+    if f == 1: # simulate failure
+        t5 = Thread(target=simulateFailure)
+        t5.start()
 
 
 if __name__ == "__main__":
