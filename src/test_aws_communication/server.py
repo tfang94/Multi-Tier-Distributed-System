@@ -1,7 +1,7 @@
 import socket
 
 def main():
-    host = '127.0.0.1'
+    host = '54.242.58.91'
     port = 12345
     s = socket.socket()
     s.bind((host, port))
