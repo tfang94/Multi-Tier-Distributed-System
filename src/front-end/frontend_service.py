@@ -10,7 +10,6 @@ from threading import Thread
 
 # Optional command line argument 
 z = 1 # number of clients to wait before starting threads
-d = 1 # indicates whether server is run on docker container, local machine, or elnux3 IP
 c = 1 # in-memory cache flag
 
 # in-memory cache
@@ -31,11 +30,7 @@ def invalidate_item(name):
 
 # catalog service sends invalidation flag upon restocking an item
 def listen_restock():
-    host = '128.119.243.168'  # elnux3 IP
-    if d == 1:
-        host = os.getenv("CATALOG_IP", "catalog")
-    if d == 2:
-        host = '127.0.0.1'
+    host = '127.0.0.1'
     port = 12545  # catalog_service restock port
     s1 = socket.socket()
     s1.connect((host, port))
@@ -66,11 +61,7 @@ class httpHandler(BaseHTTPRequestHandler):
         route_regex = re.compile(r"^/products/(.+)$")
         path = self.path
         match = route_regex.match(path)
-        host = '128.119.243.168'  # elnux3 IP
-        if d == 1:
-            host = os.getenv("CATALOG_IP", "catalog")
-        if d == 2:
-            host = '127.0.0.1'
+        host = '127.0.0.1'
         port = 12645  # catalog_service
         if match: # match exists for /products/<product name>
             name = match.group(1)
@@ -99,12 +90,8 @@ class httpHandler(BaseHTTPRequestHandler):
         route_regex = re.compile(r"^/orders/(.+)$")
         path = self.path
         match = route_regex.match(path)
-        host = '128.119.243.168'  # elnux3 IP
-        if d == 1:
-            host = os.getenv("CATALOG_IP", "catalog")
-        if d == 2:
-            host = '127.0.0.1'
-        port = 12745  # order_service
+        host = '127.0.0.1'
+        port = 11113  # order_service
         if match:  # match exists for /orders/<order_number>
             order_id = match.group(1)
             s = socket.socket()
@@ -137,12 +124,8 @@ class httpHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
         if self.path == "/orders":
-            host = '128.119.243.168'  # elnux3 IP
-            if d == 1:
-                host = os.getenv("ORDER_IP", "order")
-            if d == 2:
-                host = '127.0.0.1'
-            port = 12745  # port number order_service is running on
+            host = '127.0.0.1'
+            port = 11113  # port number order_service is running on
             s = socket.socket()
             s.connect((host, port))
             msg = "processOrder " + json.dumps(data)
@@ -174,8 +157,6 @@ def main():
     parser = OptionParser()
     parser.add_option('-z', default=1, help='Parameter for probability of sending order request', action='store',
                       type='int', dest='z')
-    parser.add_option('-d', default=1, help='Running on docker', action='store',
-                      type='int', dest='d')
     parser.add_option('-c', default=1, help='in-memory cache flag', action='store',
                       type='int', dest='c')    
     (options, args) = parser.parse_args()
@@ -183,17 +164,12 @@ def main():
     global d
     global c
     z = options.z
-    d = options.d
     c = options.c
     # assign thread to listen to catalog server for invalidation notifications due to restocking an item
     if c == 1:
         t1 = Thread(target = listen_restock, args=())
         t1.start()
-    host = '128.119.243.168'  # elnux3 IP
-    if d == 1:
-        host = socket.gethostbyname(socket.gethostname())
-    if d == 2:
-        host = '127.0.0.1'
+    host = '127.0.0.1'
     PORT = 8001
     server = ThreadingHTTPServer((host, PORT), httpHandler)
     server.serve_forever()

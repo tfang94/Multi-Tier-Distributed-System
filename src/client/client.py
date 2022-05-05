@@ -14,12 +14,9 @@ def main():
                       type='float', dest='p')
     parser.add_option('-n', default=50, help='Number of iterations of request cycles for session', action='store',
                       type='int', dest='n')
-    parser.add_option('-d', default=1, help='Running on Docker or Elnux3', action='store',
-                      type='int', dest='d')
     (options, args) = parser.parse_args()
     p = options.p  # Parameter for probability of sending order request
     n = options.n  # Number of iterations of request cycles for session
-    d = options.d  # D=1 (Server on Docker), D=0 (Server on Elnux3)
 
     query_cnt = 0
     buy_cnt = 0
@@ -42,9 +39,7 @@ def main():
             # Randomly query frontend server
             randIndex = random.randint(0, 9)
             name = nameList[randIndex]
-            host = '128.119.243.168'  # elnux3 IP
-            if d == 1:
-                host = '127.0.0.1'  # Run on Docker or local machine
+            host = '127.0.0.1'
             port = 8001
             URL = "http://{}:{}/products/{}".format(
                 host, port, name)

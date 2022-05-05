@@ -85,18 +85,7 @@ def handleClient(c, addr):  # Function to pass to threads; thread per session mo
 
 
 def main():
-    parser = OptionParser()
-    parser.add_option('-d', default=1, help='Running on docker', action='store',
-                      type='int', dest='d')
-    (options, args) = parser.parse_args()
-    global d
-    d = options.d
-
-    host = '128.119.243.168'  # elnux3 IP
-    if d == 1:
-        host = socket.gethostbyname(socket.gethostname())  # Run on Docker
-    if d == 2:
-        host = '127.0.0.1'  # Run on local machine
+    host = '127.0.0.1'
     restock_port = 12545
     s1 = socket.socket() # separate socket for sending restock notifications to front-end
     s1.bind((host, restock_port))
