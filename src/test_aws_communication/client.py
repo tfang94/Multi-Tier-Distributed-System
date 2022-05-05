@@ -2,7 +2,7 @@ import socket
 
 def main():
     host = '54.242.58.91'
-    port = 22
+    port = 12345
     s = socket.socket()
     try:
         s.connect((host, port))
