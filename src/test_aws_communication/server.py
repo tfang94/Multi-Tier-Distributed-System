@@ -2,7 +2,7 @@ import socket
 
 def main():
     host = '54.242.58.91'
-    port = 12345
+    port = 22
     s = socket.socket()
     s.bind((host, port))
     s.listen()
