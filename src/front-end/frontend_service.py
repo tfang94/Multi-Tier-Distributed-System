@@ -234,7 +234,7 @@ def main():
     parser.add_option('-z', default=1, help='Parameter for probability of sending order request', action='store',
                       type='int', dest='z')
     parser.add_option('-c', default=1, help='in-memory cache flag', action='store',
-                      type='int', dest='c')    
+                      type='int', dest='c') 
     (options, args) = parser.parse_args()
     global z
     global d
