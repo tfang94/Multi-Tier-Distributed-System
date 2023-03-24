@@ -49,8 +49,8 @@ databases that automatically sync and update, caching to make for more efficient
     their price and quantity
 
 5.  The client first queries the front-end service with a random toy. If the returned quantity is
-    greater than zero, with probability p it will send an order request (make p an variable that's
-    adjustable). The client will repeat for a number of iterations, and record the the order
+    greater than zero, with probability p it will send an order request (p is adjustable command line arg). 
+    The client will repeat for a number of iterations, and record the the order
     number and order information if a purchase request was successful. Before exiting, the client
     will retrieve the order information of each order that was made using the order query request,
     and check whether the server reply matches the locally stored order information.
